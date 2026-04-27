@@ -1,10 +1,7 @@
 import streamlit as st
 import os
-import time
-
-# Importações para Nuvem (Groq + HuggingFace)
-from langchain_groq import ChatGroq
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.llms import Ollama
+from langchain_community.embeddings import OllamaEmbeddings
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
@@ -12,280 +9,191 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
-load_dotenv() # Carrega a chave do arquivo .env
+# --- 1. CONFIGURAÇÃO DE ALTA PERFORMANCE ---
+st.set_page_config(page_title="Career AI | Vision", layout="wide", page_icon="🔮")
 
-@st.cache_resource
-def load_models():
-    # Puxa a chave das 'Secrets' do Streamlit Cloud
-    api_key = st.secrets["GROQ_API_KEY"]
-    
-    llm = ChatGroq(
-        model="llama-3.3-70b-versatile", 
-        temperature=0.2,
-        groq_api_key=api_key
-    )
-    
-    # HuggingFace roda direto no servidor do Streamlit sem erro
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    
-    return llm, embeddings
-
-# 1. CONFIGURAÇÃO DE PÁGINA
-st.set_page_config(page_title="AI Career Pro", layout="wide", page_icon="🚀")
-
-# Inicialização de mensagens
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 2. DESIGN SYSTEM (CSS AVANÇADO)
-def apply_ultra_design():
-    st.markdown("""
-        <style>
-        /* Importando fonte moderna */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
-        
-        html, body, [class*="css"] {
-            font-family: 'Inter', sans-serif;
-        }
-
-        .stApp {
-            background: radial-gradient(circle at top right, #1a1f25, #0e1117);
-        }
-
-        /* Título Estilizado */
-        .header-container {
-            text-align: center;
-            padding: 2rem 0;
-            margin-bottom: 2rem;
-        }
-        .main-title {
-            font-size: 3.5rem !important;
-            font-weight: 800 !important;
-            letter-spacing: -1px;
-            background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 0px;
-        }
-        .sub-title {
-            color: #6c757d;
-            font-size: 1.1rem;
-        }
-
-        /* Sidebar Customizada */
-        [data-testid="stSidebar"] {
-            background-color: rgba(22, 27, 34, 0.95);
-            border-right: 1px solid rgba(255,255,255,0.1);
-        }
-
-        /* Botões Estilo Glassmorphism */
-        .stButton>button {
-            border-radius: 12px;
-            padding: 0.7rem 1.5rem;
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            color: white;
-            font-weight: 600;
-            border: none;
-            box-shadow: 0 4px 15px rgba(79, 172, 254, 0.3);
-            transition: all 0.3s ease;
-        }
-        .stButton>button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(79, 172, 254, 0.5);
-        }
-
-        /* Abas Estilizadas */
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 20px;
-            background-color: transparent;
-        }
-        .stTabs [data-baseweb="tab"] {
-            height: 50px;
-            background-color: #161b22;
-            border-radius: 10px;
-            color: white;
-            padding: 0 25px;
-            border: 1px solid #30363d;
-        }
-        .stTabs [aria-selected="true"] {
-            background: rgba(79, 172, 254, 0.1) !important;
-            border-color: #4facfe !important;
-        }
-
-        /* Chat Bubbles Estilo Moderno */
-        .stChatMessage {
-            background-color: rgba(255, 255, 255, 0.03) !important;
-            border: 1px solid rgba(255, 255, 255, 0.05) !important;
-            border-radius: 16px !important;
-            padding: 20px !important;
-            margin-bottom: 15px !important;
-        }
-
-        /* Inputs e áreas de texto */
-        .stTextArea textarea {
-            background-color: #0d1117 !important;
-            border-radius: 12px !important;
-            border: 1px solid #30363d !important;
-            color: #c9d1d9 !important;
-        }
-        
-        /* Barra de rolagem */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #0e1117; }
-        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
-        </style>
-    """, unsafe_allow_html=True)
-
-apply_ultra_design()
-
-# 3. BACKEND (MODELOS)
-DB_PATH = "./vectorstack"
-TMP_DIR = "./temp_pdf"
-if not os.path.exists(TMP_DIR): os.makedirs(TMP_DIR)
-
-@st.cache_resource
-def load_models():
-    llm = ChatOllama(model="llama3", temperature=0.2)
-    embeddings = OllamaEmbeddings(model="nomic-embed-text")
-    return llm, embeddings
-
-llm, embeddings = load_models()
-
-def stream_data(text):
-    for word in text.split(" "):
-        yield word + " "
-        time.sleep(0.03)
-
-# 4. SIDEBAR REESTILIZADA
-with st.sidebar:
-    st.markdown("### Centro de Comando")
-    uploaded_file = st.file_uploader("Upload do Currículo", type="pdf", label_visibility="collapsed")
-    
-    if st.button("⚡ ANALISAR AGORA"):
-        if uploaded_file:
-            with st.spinner("Decodificando arquivo..."):
-                file_path = os.path.join(TMP_DIR, uploaded_file.name)
-                with open(file_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
-                
-                loader = PyPDFLoader(file_path)
-                docs = loader.load()
-                splits = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=80).split_documents(docs)
-                
-                vectorstore = Chroma.from_documents(
-                    documents=splits, embedding=embeddings, persist_directory=DB_PATH
-                )
-                st.session_state.vectorstore = vectorstore
-                
-                if not st.session_state.messages:
-                    welcome = f"Conexão estabelecida. Analisei seu perfil em '{uploaded_file.name}'. Como posso otimizar sua carreira hoje?"
-                    st.session_state.messages.append({"role": "assistant", "content": welcome})
-                st.rerun()
-
-# 5. CONTEÚDO PRINCIPAL
+# --- 2. CSS REVOLUCIONÁRIO (GLASSMORPHISM + NEON) ---
 st.markdown("""
-    <div class="header-container">
-        <p class="main-title">AI Career Pro</p>
-        <p class="sub-title">Sua trajetória profissional potencializada por inteligência artificial local</p>
-    </div>
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;900&family=Inter:wght@300;400;700&display=swap');
+
+    * { font-family: 'Inter', sans-serif; }
+
+    .stApp {
+        background: radial-gradient(circle at 50% 50%, #12121f 0%, #050508 100%);
+        color: #f0f0f0;
+    }
+
+    /* Título Futurista */
+    .main-title {
+        font-family: 'Orbitron', sans-serif;
+        font-size: clamp(2rem, 5vw, 4rem);
+        font-weight: 900;
+        text-align: center;
+        background: linear-gradient(90deg, #00f2fe, #4facfe, #7000ff);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        filter: drop-shadow(0 0 20px rgba(0, 242, 254, 0.4));
+        margin-bottom: 40px;
+        letter-spacing: 4px;
+    }
+
+    /* Sidebar Estilizada */
+    [data-testid="stSidebar"] {
+        background-color: rgba(255, 255, 255, 0.02) !important;
+        backdrop-filter: blur(20px);
+        border-right: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    /* Cards de Vidro para Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        background: rgba(255, 255, 255, 0.03);
+        backdrop-filter: blur(15px);
+        border-radius: 30px;
+        padding: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        color: #888 !important;
+        font-weight: 700;
+        transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border-radius: 20px;
+    }
+
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%) !important;
+        color: #000 !important;
+        box-shadow: 0 0 30px rgba(0, 242, 254, 0.4);
+    }
+
+    /* Botão com Brilho Inteligente */
+    div.stButton > button {
+        background: linear-gradient(90deg, #7000ff, #4facfe);
+        border: none;
+        color: white;
+        height: 50px;
+        border-radius: 15px;
+        font-weight: 900;
+        font-family: 'Orbitron', sans-serif;
+        letter-spacing: 2px;
+        transition: 0.5s;
+        box-shadow: 0 4px 15px rgba(112, 0, 255, 0.3);
+    }
+
+    div.stButton > button:hover {
+        transform: scale(1.02);
+        box-shadow: 0 0 40px rgba(112, 0, 255, 0.6);
+        border: 1px solid #00f2fe;
+    }
+
+    /* Input de Chat Estilo Floating */
+    .stChatInputContainer {
+        border-radius: 25px !important;
+        background-color: rgba(255, 255, 255, 0.05) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        backdrop-filter: blur(10px);
+    }
+    </style>
 """, unsafe_allow_html=True)
 
-tab1, tab2 = st.tabs(["💬 Consultoria de Chat", "🛠️ Laboratório de Documentos"])
+# --- 3. CORE: IA ENGINE (OLLAMA) ---
+@st.cache_resource
+def load_models():
+    # Llama 3 via Ollama Local
+    llm = Ollama(model="llama3") 
+    embeddings = OllamaEmbeddings(model="llama3")
+    return llm, embeddings
 
-with tab1:
-    # Container para histórico
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"], avatar="🤖" if message["role"]=="assistant" else "👤"):
-            st.markdown(message["content"])
+try:
+    llm, embeddings = load_models()
+except Exception as e:
+    st.error("⚠️ SINAL PERDIDO: O Ollama não responde. Verifique se o daemon está ativo.")
+    st.stop()
 
-    if prompt := st.chat_input("Diga algo como: 'Quais cargos combinam comigo?'"):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user", avatar="👤"):
-            st.markdown(prompt)
+# --- 4. SIDEBAR: CORE COMMAND CENTER ---
+with st.sidebar:
+    st.markdown("<h2 style='color:#00f2fe; font-family:Orbitron;'>CORE SYSTEM</h2>", unsafe_allow_html=True)
+    st.markdown("---")
+    uploaded_file = st.file_uploader("Upload Profile Data (PDF)", type="pdf")
+    
+    if st.button("Sincronizar IA ⚡"):
+        if uploaded_file:
+            with st.spinner("Decoding DNA..."):
+                if not os.path.exists("temp"): os.makedirs("temp")
+                path = os.path.join("temp", uploaded_file.name)
+                with open(path, "wb") as f: f.write(uploaded_file.getbuffer())
+                
+                loader = PyPDFLoader(path)
+                docs = loader.load()
+                splits = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150).split_documents(docs)
+                
+                st.session_state.vectorstore = Chroma.from_documents(documents=splits, embedding=embeddings)
+                
+                if not st.session_state.messages:
+                    st.session_state.messages.append({
+                        "role": "assistant", 
+                        "content": f"🌌 **Nexus Estabelecido.** Perfil de '{uploaded_file.name}' carregado. O que vamos conquistar hoje?"
+                    })
+                st.success("Sincronia OK")
+                st.rerun()
 
-        if "vectorstore" in st.session_state:
-            retriever = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 3})
-            prompt_template = ChatPromptTemplate.from_template("Contexto: {context}\n\nPergunta: {question}\nResposta sênior:")
-            chain = ({"context": retriever | (lambda docs: "\n\n".join(d.page_content for d in docs)), "question": RunnablePassthrough()} | prompt_template | llm | StrOutputParser())
+# --- 5. INTERFACE DE COMANDO ---
+st.markdown('<p class="main-title">CAREER AI VISION</p>', unsafe_allow_html=True)
 
-            with st.chat_message("assistant", avatar="🤖"):
-                placeholder = st.empty()
-                full_response = ""
-                result = chain.invoke(prompt)
-                for chunk in stream_data(result):
-                    full_response += chunk
-                    placeholder.markdown(full_response + "▌")
-                placeholder.markdown(full_response)
-            st.session_state.messages.append({"role": "assistant", "content": full_response})
-        else:
-            st.error("Aguardando upload de documento na sidebar.")
+t1, t2, t3 = st.tabs(["💬 NEXUS CHAT", "🎯 TARGET MATCH", "🎙️ NEURAL SIM"])
 
-with tab2:
-    if "vectorstore" not in st.session_state:
-        st.warning("⚠️ Ative o Centro de Comando enviando um PDF primeiro.")
-    else:
-        st.markdown("### 🎯 Score de Compatibilidade (Match de Vaga)")
+with t1:
+    # Renderiza mensagens com estilo futurista
+    for m in st.session_state.messages:
+        with st.chat_message(m["role"]):
+            st.markdown(m["content"])
+
+    if p := st.chat_input("Insira sua frequência de comando..."):
+        st.session_state.messages.append({"role": "user", "content": p})
+        with st.chat_message("user"): st.markdown(p)
         
-        # Campo para colar a vaga
-        vaga_desc = st.text_area("Cole aqui a descrição da vaga (Requisitos/Tecnologias):", 
-                                 placeholder="Ex: Procuramos desenvolvedor Java com experiência em Spring Boot e Docker...",
-                                 height=150)
+        if "vectorstore" in st.session_state:
+            ret = st.session_state.vectorstore.as_retriever()
+            template = """Você é uma IA de carreira ultra-avançada. Contexto: {context} | Pergunta: {question}"""
+            chain = ({"context": ret | (lambda d: "\n\n".join(x.page_content for x in d)), "question": RunnablePassthrough()} 
+                     | ChatPromptTemplate.from_template(template) | llm | StrOutputParser())
+            
+            with st.chat_message("assistant"):
+                res = chain.invoke(p)
+                st.markdown(res)
+                st.session_state.messages.append({"role": "assistant", "content": res})
+        else:
+            st.info("💡 Carregue seus dados no Core System para iniciar.")
 
-        if st.button("🚀 Calcular Match"):
-            if vaga_desc:
-                with st.spinner("Analisando compatibilidade..."):
-                    # Criando o Retriever para buscar as informações do currículo
-                    retriever = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 5})
-                    
-                    # Prompt Estruturado para análise técnica
-                    match_prompt = ChatPromptTemplate.from_template("""
-                        Você é um especialista em recrutamento técnico (Tech Recruiter).
-                        Compare o CURRÍCULO fornecido com a VAGA DE EMPREGO abaixo.
-                        
-                        CURRÍCULO: {context}
-                        VAGA: {vaga}
-                        
-                        Retorne a resposta EXATAMENTE neste formato:
-                        SCORE: [Número de 0 a 100]
-                        PONTOS FORTES: [Liste 3 pontos]
-                        GAPS: [Liste o que falta para o candidato]
-                        DICA: [Uma dica de ouro para a entrevista]
-                    """)
+with t2:
+    if "vectorstore" in st.session_state:
+        st.markdown("### 🎯 Score de Compatibilidade")
+        v = st.text_area("Descreva o alvo (Vaga de Emprego):", height=200)
+        if st.button("ANALISAR MATCH"):
+            if v:
+                with st.spinner("Processando..."):
+                    ret = st.session_state.vectorstore.as_retriever()
+                    ctx = "\n".join([d.page_content for d in ret.get_relevant_documents(v)])
+                    res = llm.invoke(f"Seja um recrutador exigente. Compare: {ctx} com a vaga {v}. Dê uma nota de 0-100 e aponte os erros.")
+                    st.write(res)
+    else: st.info("🔒 Aguardando entrada de dados.")
 
-                    match_chain = (
-                        {"context": retriever | (lambda docs: "\n\n".join(d.page_content for d in docs)), 
-                         "vaga": RunnablePassthrough()}
-                        | match_prompt 
-                        | llm 
-                        | StrOutputParser()
-                    )
-
-                    resultado = match_chain.invoke(vaga_desc)
-                    
-                    # --- EXIBIÇÃO ESTILIZADA ---
+with t3:
+    if "vectorstore" in st.session_state:
+        st.markdown("### 🎙️ Simulação de Entrevista Neural")
+        cargo = st.text_input("Qual o seu objetivo?")
+        if st.button("GERAR PROTOCOLO"):
+            if cargo:
+                with st.spinner("Mapeando perguntas..."):
+                    ret = st.session_state.vectorstore.as_retriever()
+                    ctx = "\n".join([d.page_content for d in ret.get_relevant_documents(cargo)])
+                    res = llm.invoke(f"Gere 5 perguntas técnicas de nível SÊNIOR para {cargo} baseadas em: {ctx}")
                     st.markdown("---")
-                    
-                    # Tentar extrair o Score para mostrar um gráfico
-                    try:
-                        score_val = int([line for line in resultado.split('\n') if 'SCORE:' in line][0].split(':')[1].strip().replace('%',''))
-                        st.metric("Índice de Compatibilidade", f"{score_val}%")
-                        st.progress(score_val / 100)
-                    except:
-                        st.info("Análise Concluída:")
-
-                    st.markdown(f"#### 📊 Relatório de Análise\n{resultado}")
+                    st.markdown(res)
             else:
-                st.error("Por favor, cole a descrição da vaga para analisar.")
-
-        # Mantendo os botões anteriores abaixo
-        st.markdown("---")
-        st.markdown("### 🛠️ Outros Geradores")
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("Gerar Carta de Apresentação"):
-                 # (Lógica da carta aqui...)
-                 pass
-        with c2:
-            if st.button("Simular Mock Interview"):
-                 # (Lógica da entrevista aqui...)
-                 pass
+                st.warning("Especifique o cargo.")
+    else: st.info("🔒 Sistema offline. Carregue o PDF.")

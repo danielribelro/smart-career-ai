@@ -1,6 +1,8 @@
 .env
-vectorstack/
-temp_pdf/
 __pycache__/
+temp/
+temp_pdf/
+chroma_db/
+vectorstack/
 *.pyc
 .streamlit/secrets.toml
