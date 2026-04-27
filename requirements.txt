@@ -1,9 +1,10 @@
 streamlit
 langchain
 langchain-groq
+langchain-huggingface
 langchain-community
 langchain-chroma
-python-dotenv
 pypdf
 sentence-transformers
+python-dotenv
 plotly

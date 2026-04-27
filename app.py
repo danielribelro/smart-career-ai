@@ -1,30 +1,33 @@
 import streamlit as st
 import os
 import time
-from langchain_ollama import OllamaEmbeddings, ChatOllama
+
+# Importações para Nuvem (Groq + HuggingFace)
+from langchain_groq import ChatGroq
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
-from langchain_groq import ChatGroq
-from dotenv import load_dotenv
 
 load_dotenv() # Carrega a chave do arquivo .env
 
 @st.cache_resource
 def load_models():
-    # Substituindo Ollama pelo Groq para velocidade extrema
+    # Puxa a chave das 'Secrets' do Streamlit Cloud
+    api_key = st.secrets["GROQ_API_KEY"]
+    
     llm = ChatGroq(
-        model="llama-3.3-70b-versatile", # Ou o modelo que preferir no Groq
+        model="llama-3.3-70b-versatile", 
         temperature=0.2,
-        api_key=os.getenv("GROQ_API_KEY") 
+        groq_api_key=api_key
     )
-    # IMPORTANTE: Mantenha os Embeddings locais ou use HuggingFace 
-    # para não depender do Ollama no servidor hospedado
-    from langchain_community.embeddings import HuggingFaceEmbeddings
+    
+    # HuggingFace roda direto no servidor do Streamlit sem erro
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    
     return llm, embeddings
 
 # 1. CONFIGURAÇÃO DE PÁGINA
