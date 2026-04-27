@@ -1,0 +1,9 @@
+streamlit
+langchain
+langchain-groq
+langchain-community
+langchain-chroma
+python-dotenv
+pypdf
+sentence-transformers
+plotly
