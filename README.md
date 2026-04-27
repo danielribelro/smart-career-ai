@@ -21,6 +21,3 @@ Este projeto é um assistente de carreira inteligente que utiliza **RAG (Retriev
 2. Instale as dependências: `pip install -r requirements.txt`
 3. Configure sua `GROQ_API_KEY` no arquivo `.env` ou no Secrets do Streamlit.
 4. Execute: `streamlit run app.py`
-
----
-Desenvolvido por [Seu Nome] - Estudante de Análise e Desenvolvimento de Sistemas.
